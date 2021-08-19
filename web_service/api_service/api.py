@@ -1,6 +1,6 @@
+import re
 from decimal import Decimal
 from time import time
-import re
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
