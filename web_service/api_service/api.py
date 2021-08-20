@@ -21,7 +21,6 @@ class DealsView(APIView):
     permission_class = permissions.IsAuthenticated
 
     def get(self, request):
-        print(request.headers)
         user = request.user
         if user.is_authenticated:
             data_for_response = self.get_final_data(user)
