@@ -2,15 +2,15 @@ from django.db import models
 
 
 class Customer(models.Model):
-    name = models.CharField(max_length=300, verbose_name='Логин клиента')
+    username = models.CharField(max_length=300, verbose_name='Логин клиента')
     spent_money = models.FloatField(default=0.0, verbose_name='Всего потрачено средств')
 
     def __str__(self):
-        return self.name
+        return self.username
 
     class Meta:
         db_table = 'customers'
-        ordering = ['name']
+        ordering = ['username']
         verbose_name = 'Клиент'
         verbose_name_plural = 'Клиенты'
 

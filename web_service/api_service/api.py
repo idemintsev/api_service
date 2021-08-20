@@ -2,34 +2,33 @@ import re
 from decimal import Decimal
 from time import time
 
+from django.contrib.auth import authenticate, login
+from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api_service.models import Customer, Deal
-from api_service.serializers import DealsSerialaizer, FileUploadSerializer
+from api_service.serializers import FileUploadSerializer, CustomersSerializer
 
 DATETIME_TEMPLATE = re.compile(
     r"([0-9]{4}\-[0][0-9]|[0-9]{4}\-[1][0-2]\-[0-3][0-9]\s[0-2][0-9]\:[0-5][0-9]\:[0-5][0-9])")
 
 
 class DealsView(APIView):
+    """
+    API для обработки пересылаемого CSV-файла и отображения последних обработанных данных.
+    """
+    permission_class = permissions.IsAuthenticated
+
     def get(self, request):
-        deals = Deal.objects.all()
-        serialaizer_data = DealsSerialaizer(deals, many=True).data
-        return Response({'deals': serialaizer_data})
+        print(request.headers)
+        user = request.user
+        if user.is_authenticated:
+            data_for_response = self.get_final_data(user)
+            serializer = CustomersSerializer(data_for_response, many=True).data
+            return Response({'response': serializer})
+        return Response({'response': 'Необходима авторизация'}, status=401)
 
-    def post(self, request):
-        deals = request.data.get('deals')
-        serialaizer = DealsSerialaizer(data=deals)
-        if serialaizer.is_valid(raise_exception=True):
-            if deals.get('item') == 'amber':
-                return Response(
-                    {'Status': 'Error, Desc: <Описание ошибки> - в процессе обработки файла произошла ошибка'})
-            deal_saved = serialaizer.save()
-        return Response({'Status': 'OK - файл был обработан без ошибок'})
-
-
-class FileUploadView(APIView):
     def post(self, request):
         serializer = FileUploadSerializer(data=request.data)
         if serializer.is_valid(raise_exception=True):
@@ -39,7 +38,56 @@ class FileUploadView(APIView):
                 return Response(result[1], status=201)
             return Response(result[1], status=422)
 
-    def file_handler(self, file):
+    def get_final_data(self, user) -> list:
+        """
+        Возвращает список, содержащий словарь из имени пользователя, потраченных деньгах и кортежа камней. Структура
+        списка подготовлена для передачи в Response.
+        :param user: Пользователь, который делает запрос.
+        :return: list[ dict{'username': user.username,
+                            'spent_money': spent_money,
+                            'gems': gems}, ]
+        """
+        customers = Customer.objects.all().order_by('-spent_money')[:5]
+        customer_spent_money, customer_gems = self.get_customer_gems(user)
+        other_customers_gems = self.get_other_customers_gems(customers)
+        result = [
+            {'username': user.username,
+             'spent_money': customer_spent_money,
+             'gems': tuple(customer_gems.intersection(other_customers_gems))},
+        ]
+        return result
+
+    def get_customer_gems(self, user) -> tuple:
+        """
+        Возвращает из БД даннные (коилчество потраченых денег и перечень приобретенных камней) для конкретного
+        пользователя
+        :param user: Пользователь, который делает запрос
+        :return: tuple(spent_money, set{'...', '...', '...'...})
+        """
+        customer = Customer.objects.get(username=user)
+        customer_spent_money = customer.spent_money
+        user_deals = Deal.objects.filter(customer=customer)
+        return customer_spent_money, set([deal.item for deal in user_deals])
+
+    def get_other_customers_gems(self, customers) -> set:
+        """
+        Добавляет во множество названия камней, которые приобретали пользователи customers.
+        :param customers: Queryset с данными экземпляров класса Customers.
+        :return: Множество с перечнем камней.
+        """
+        result = set()
+        for customer in customers:
+            customer_deals = Deal.objects.filter(customer=customer)
+            result.update({deal.item for deal in customer_deals})
+        return result
+
+    def file_handler(self, file) -> tuple:
+        """
+        Проверяет формат файла, запускает процесс парсинга файла - self.file_parser().
+        :param file: Пересылаемый CSV-файл для обработки.
+        :return: Если файл обработан успешно - возвращает кортеж (True, dict), в случае ошибки возвращает кортеж
+        (False, dict), в dict содержится описание ошибки.
+        """
         if file.name.endswith('.csv'):
             result = self.file_parser(file)
             if result is None:
@@ -48,6 +96,13 @@ class FileUploadView(APIView):
         return False, {'Status': 'Error, Desc: Формат файла не CSV - в процессе обработки файла произошла ошибка'}
 
     def file_parser(self, file):
+        """
+        Построчно парсит CSV-файл с помощью генератора chunks().
+        Если проверка данных в строке методом self.check_data возвращает False, прерывает обработку и возвращает
+        описание возникшей ошибки.
+        :param file: Пересылаемый CSV-файл для обработки.
+        :return: None или строку с описанием возникшей ошибки.
+        """
         file_chunks = file.chunks(chunk_size=None)
         transaction_number = str(time())
         for chunk in file_chunks:
@@ -56,15 +111,20 @@ class FileUploadView(APIView):
             for row in decoded_chunk:
                 if 'customer,item,total,quantity,date' not in row:
                     validated_data = self.check_data(row)
-                    print(validated_data)
                     if validated_data[0]:
                         self.save_data_into_bd(validated_data[1], transaction_number)
                     else:
                         return validated_data[1]
 
-    def save_data_into_bd(self, data: tuple, transaction_number: str):
+    def save_data_into_bd(self, data: tuple, transaction_number: str) -> None:
+        """
+        Сохраняет данные из файла в БД.
+        :param data: Кортеж (str: customer_name, str: item, float: total, int: quantity, str: date)
+        :param transaction_number: строка с уникальным номером транзакции, в которой обрабатывается CSV-файл
+        :return: None
+        """
         customer_name, item, total, quantity, date_ = data
-        customer = Customer.objects.get_or_create(name=customer_name)[0]
+        customer = Customer.objects.get_or_create(username=customer_name)[0]
         Deal.objects.create(
             customer=customer,
             item=item,
@@ -81,12 +141,12 @@ class FileUploadView(APIView):
         """
         Проверяет данные из файла:
         - все ли пять столбцов заполнены;
-        - формат даты и времени;
-        - можно ли перевести в float и int сумму сделки и количество камней.
+        - соответствует ли формат даты и времени шаблону DATETIME_TEMPLATE;
+        - можно ли привести к float сумму сделки и к int количество камней.
         :param data: Строка, в которой через запятую перечисляются customer_name, item, total, quantity, date.
-        :return: кортеж (False, str: <Описание ошибки>) или (True, (customer_name, item, total, quantity, date))
+        :return: кортеж (False, str: <Описание ошибки>) или
+        (True, tuple: (str: customer_name, str: item, float: total, int: quantity, str: date))
         """
-        print(data)
         try:
             customer_name, item, total, quantity, date_ = data.split(',')
         except ValueError as exc:
@@ -108,3 +168,28 @@ class FileUploadView(APIView):
             return False, str(exc)
 
         return True, (customer_name, item, total, quantity, date_)
+
+
+class LoginView(APIView):
+    def post(self, request, format=None):
+        data = request.data
+
+        username = data.get('username', None)
+        password = data.get('password', None)
+
+        user = authenticate(username=username, password=password)
+
+        if user is not None:
+            if user.is_active:
+                login(request, user)
+                return Response({'response': f'Вы вошли как {request.user}'}, status=200)
+            else:
+                return Response(status=404)
+        else:
+            return Response(status=404)
+
+
+class Logout(APIView):
+    def get(self, request, format=None):
+        request.user.auth_token.delete()
+        return Response({'response': 'Выход выполнен успешно'}, status=200)

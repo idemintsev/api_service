@@ -1,4 +1,5 @@
 from django.contrib import admin
+
 from api_service.models import Customer, Deal
 
 
@@ -7,10 +8,10 @@ class DealsInLine(admin.TabularInline):
 
 
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'spent_money']
-    list_filter = ['name', 'spent_money']
+    list_display = ['id', 'username', 'spent_money']
+    list_filter = ['username', 'spent_money']
     inlines = [DealsInLine]
-    list_display_links = ['name', ]
+    list_display_links = ['username', ]
 
 
 class DealAdmin(admin.ModelAdmin):
