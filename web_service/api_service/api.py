@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from api_service.models import Customer, Deal
 from api_service.serializers import FileUploadSerializer, CustomersSerializer
 
+#  Формат даты 2021-01-31
 DATETIME_TEMPLATE = re.compile(
     r"([0-9]{4}\-[0][0-9]|[0-9]{4}\-[1][0-2]\-[0-3][0-9]\s[0-2][0-9]\:[0-5][0-9]\:[0-5][0-9])")
 
@@ -18,15 +19,12 @@ class DealsView(APIView):
     """
     API для обработки пересылаемого CSV-файла и отображения последних обработанных данных.
     """
-    permission_class = permissions.IsAuthenticated
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get(self, request):
-        user = request.user
-        if user.is_authenticated:
-            data_for_response = self.get_final_data(user)
-            serializer = CustomersSerializer(data_for_response, many=True).data
-            return Response({'response': serializer})
-        return Response({'response': 'Необходима авторизация'}, status=401)
+        data_for_response = Customer.objects.all().order_by('-spent_money')[:5]
+        serializer = CustomersSerializer(data_for_response, many=True).data
+        return Response({'response': serializer})
 
     def post(self, request):
         serializer = FileUploadSerializer(data=request.data)
@@ -36,49 +34,6 @@ class DealsView(APIView):
             if result[0] is True:
                 return Response(result[1], status=201)
             return Response(result[1], status=422)
-
-    def get_final_data(self, user) -> list:
-        """
-        Возвращает список, содержащий словарь из имени пользователя, потраченных деньгах и кортежа камней. Структура
-        списка подготовлена для передачи в Response.
-        :param user: Пользователь, который делает запрос.
-        :return: list[ dict{'username': user.username,
-                            'spent_money': spent_money,
-                            'gems': gems}, ]
-        """
-        customers = Customer.objects.all().order_by('-spent_money')[:5]
-        customer_spent_money, customer_gems = self.get_customer_gems(user)
-        other_customers_gems = self.get_other_customers_gems(customers)
-        result = [
-            {'username': user.username,
-             'spent_money': customer_spent_money,
-             'gems': tuple(customer_gems.intersection(other_customers_gems))},
-        ]
-        return result
-
-    def get_customer_gems(self, user) -> tuple:
-        """
-        Возвращает из БД даннные (коилчество потраченых денег и перечень приобретенных камней) для конкретного
-        пользователя
-        :param user: Пользователь, который делает запрос
-        :return: tuple(spent_money, set{'...', '...', '...'...})
-        """
-        customer = Customer.objects.get(username=user)
-        customer_spent_money = customer.spent_money
-        user_deals = Deal.objects.filter(customer=customer)
-        return customer_spent_money, set([deal.item for deal in user_deals])
-
-    def get_other_customers_gems(self, customers) -> set:
-        """
-        Добавляет во множество названия камней, которые приобретали пользователи customers.
-        :param customers: Queryset с данными экземпляров класса Customers.
-        :return: Множество с перечнем камней.
-        """
-        result = set()
-        for customer in customers:
-            customer_deals = Deal.objects.filter(customer=customer)
-            result.update({deal.item for deal in customer_deals})
-        return result
 
     def file_handler(self, file) -> tuple:
         """
