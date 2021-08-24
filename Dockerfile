@@ -5,13 +5,13 @@ ENV PYTHONUNBUFFERED 1
 RUN mkdir -p /home/ilia/PycharmProjects/DRF/app
 RUN git clone https://github.com/idemintsev/api_service.git /home/ilia/PycharmProjects/DRF/app
 
-WORKDIR /home/ilia/PycharmProjects/DRF
+WORKDIR /home/ilia/PycharmProjects/DRF/app
 
 RUN ls .
 
 RUN pip install -r requirements.txt
 
-VOLUME /home/ilia/PycharmProjects/DRF
+VOLUME /home/ilia/PycharmProjects/DRF/app
 
 EXPOSE 8080
 
