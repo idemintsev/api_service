@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from api_service.models import Customer, Deal
 from api_service.serializers import FileUploadSerializer, CustomersSerializer
 
-#  Формат даты 2021-01-31
+#  Формат даты 2021-01-31 12:10:55
 DATETIME_TEMPLATE = re.compile(
     r"([0-9]{4}\-[0][0-9]|[0-9]{4}\-[1][0-2]\-[0-3][0-9]\s[0-2][0-9]\:[0-5][0-9]\:[0-5][0-9])")
 

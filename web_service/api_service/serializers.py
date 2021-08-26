@@ -7,7 +7,7 @@ from api_service.models import Customer, Deal
 logging.basicConfig(level=logging.INFO)
 
 
-class DealsSerialaizer(serializers.Serializer):
+class DealsSerializer(serializers.Serializer):
     customer = serializers.CharField(max_length=300)
     item = serializers.CharField(max_length=300)
     total = serializers.FloatField()
