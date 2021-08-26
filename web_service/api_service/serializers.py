@@ -28,7 +28,7 @@ class CustomersSerializer(serializers.ModelSerializer):
         Возвращает множество из купленных камней для каждого пользователя.
         """
         logging.debug(f' obj - {obj}')
-        deals_queryset = Deal.objects.filter(customer=obj)
+        deals_queryset = Deal.objects.select_related('customer').filter(customer=obj)
         logging.debug(f' deals_queryset - {deals_queryset}')
         gems = set([deal.item for deal in deals_queryset])
         logging.debug(f' gems - {gems}')

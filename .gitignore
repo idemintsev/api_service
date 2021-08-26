@@ -1,2 +1,6 @@
 /venv/
 /web_service/api_service/migrations/
+*.pyc
+#*/*/*/__pycache__/
+#*/*/__pycache__/
+#*/__pycache__/

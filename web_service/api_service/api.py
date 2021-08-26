@@ -22,7 +22,7 @@ class DealsView(APIView):
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get(self, request):
-        data_for_response = Customer.objects.all().order_by('-spent_money')[:5]
+        data_for_response = Customer.objects.prefetch_related('deals').order_by('-spent_money')[:5]
         serializer = CustomersSerializer(data_for_response, many=True).data
         return Response({'response': serializer})
 
