@@ -37,17 +37,23 @@ class DealsView(APIView):
 
     def file_handler(self, file) -> tuple:
         """
-        Проверяет формат файла, запускает процесс парсинга файла - self.file_parser().
+        Запускает проверку формата файла, затем процесс парсинга файла - self.file_parser().
         :param file: Пересылаемый CSV-файл для обработки.
         :return: Если файл обработан успешно - возвращает кортеж (True, dict), в случае ошибки возвращает кортеж
         (False, dict), в dict содержится описание ошибки.
         """
-        if file.name.endswith('.csv'):
+        is_csv_file = self.check_format(file)
+        if is_csv_file:
             result = self.file_parser(file)
             if result is None:
                 return True, {'Status': 'OK - файл был обработан без ошибок'}
             return False, {'Status': result}
         return False, {'Status': 'Error, Desc: Формат файла не CSV - в процессе обработки файла произошла ошибка'}
+
+    def check_format(self, file):
+        if file.name.endswith('.csv'):
+            return True
+        return False
 
     def file_parser(self, file):
         """
@@ -99,12 +105,15 @@ class DealsView(APIView):
         - можно ли привести к float сумму сделки и к int количество камней.
         :param data: Строка, в которой через запятую перечисляются customer_name, item, total, quantity, date.
         :return: кортеж (False, str: <Описание ошибки>) или
-        (True, tuple: (str: customer_name, str: item, float: total, int: quantity, str: date))
+                 (True, tuple: (str: customer_name, str: item, float: total, int: quantity, str: date))
         """
         try:
-            customer_name, item, total, quantity, date_ = data.split(',')
+            customer_name, item, total, quantity, date_, *extra_data = data.split(',')
         except ValueError as exc:
             return False, f'Error, Desc: {exc} файл заполнен некорректно - в процессе обработки файла произошла ошибка'
+
+        if extra_data:
+            return False, 'Error, Desc: файл содержит больше 5 столбцов - в процессе обработки файла произошла ошибка'
 
         try:
             total = float(total)
@@ -121,7 +130,9 @@ class DealsView(APIView):
         except ValueError as exc:
             return False, str(exc)
 
-        return True, (customer_name, item, total, quantity, date_)
+        #  В settings.py USE_TZ=True, поэтому без добавления '.000000+00:00' к date_ получаем предупреждение от Django:
+        #  "RuntimeWarning: DateTimeField Deal.date received a naive datetime ... while time zone support is active...
+        return True, (customer_name, item, total, quantity, f'{date_}.000000+00:00')
 
 
 class LoginView(APIView):
