@@ -3,6 +3,7 @@ from decimal import Decimal
 from time import time
 
 from django.contrib.auth import authenticate, login
+from django.db.transaction import atomic
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -76,6 +77,7 @@ class DealsView(APIView):
                     else:
                         return validated_data[1]
 
+    @atomic
     def save_data_into_bd(self, data: tuple, transaction_number: str) -> None:
         """
         Сохраняет данные из файла в БД.
