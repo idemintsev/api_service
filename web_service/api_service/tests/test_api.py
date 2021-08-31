@@ -1,18 +1,11 @@
 from django.test import TestCase
 from unittest.mock import Mock
-from io import BytesIO
 
 from api_service.api import DealsView
 from api_service.models import Deal
 
 
 class DealsViewTest(TestCase):
-
-    def test_token_authentication(self):
-        pass
-
-    def test_wright_file_format(self):
-        pass
 
     def test_check_format_wrong_file(self):
         view = DealsView()
